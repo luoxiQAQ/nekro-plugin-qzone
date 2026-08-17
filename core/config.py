@@ -12,32 +12,21 @@ class LLMConfig:
         self.post_prompt = config.POST_PROMPT
         self.comment_provider_id = ""
         self.comment_prompt = config.COMMENT_PROMPT
-        self.reply_provider_id = ""
-        self.reply_prompt = config.REPLY_PROMPT
 
 
 class SourceConfig:
     def __init__(self) -> None:
         self.ignore_groups = config.IGNORE_GROUPS
-        self.ignore_users = config.IGNORE_USERS
         self.post_max_msg = config.POST_MAX_MSG
 
     def is_ignore_group(self, group_id: str) -> bool:
         return str(group_id) in {str(x) for x in self.ignore_groups}
-
-    def is_ignore_user(self, user_id: str) -> bool:
-        return str(user_id) in {str(x) for x in self.ignore_users}
 
 
 class TriggerConfig:
     def __init__(self) -> None:
         self.publish_cron = config.PUBLISH_CRON
         self.publish_offset = config.PUBLISH_OFFSET
-        self.comment_cron = config.COMMENT_CRON
-        self.comment_offset = config.COMMENT_OFFSET
-        self.read_prob = config.READ_PROB
-        self.send_admin = config.SEND_ADMIN
-        self.like_when_comment = config.LIKE_WHEN_COMMENT
 
 
 class PluginConfig:
@@ -78,30 +67,5 @@ class PluginConfig:
         return config.TIMEOUT
 
     @property
-    def show_name(self) -> bool:
-        return config.SHOW_NAME
-
-    @property
     def admins_id(self) -> list[str]:
         return [str(x).strip() for x in config.ADMIN_USERS if str(x).strip().isdigit()]
-
-    @property
-    def admin_id(self) -> str | None:
-        ids = self.admins_id
-        return ids[0] if ids else None
-
-    def append_ignore_users(self, uid: str | list[str]) -> None:
-        uids = [uid] if isinstance(uid, str) else uid
-        for item in uids:
-            s = str(item)
-            if not self.source.is_ignore_user(s):
-                config.IGNORE_USERS.append(s)
-        plugin.save_config(config)
-
-    def remove_ignore_users(self, uid: str | list[str]) -> None:
-        uids = [uid] if isinstance(uid, str) else uid
-        for item in uids:
-            s = str(item)
-            if self.source.is_ignore_user(s):
-                config.IGNORE_USERS.remove(s)
-        plugin.save_config(config)

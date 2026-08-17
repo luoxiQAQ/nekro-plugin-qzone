@@ -11,7 +11,7 @@ from nekro_agent.services.agent.openai import gen_openai_chat_response
 from ..plugin import config
 from .config import PluginConfig
 from .log import logger
-from .model import Comment, Post
+from .model import Post
 
 
 class LLMAction:
@@ -130,29 +130,5 @@ class LLMAction:
             comment = re.sub(r"[\s\u3000]+", "", raw).rstrip("。")
             logger.info(f"LLM 生成的评论：{comment}")
             return comment
-        except Exception as e:
-            raise ValueError(f"LLM 调用失败：{e}") from e
-
-    async def generate_reply(
-        self,
-        post: Post,
-        comment: Comment,
-        chat_key: str = "",
-    ) -> str | None:
-        """根据评论内容生成回复"""
-        content = post.text
-        if post.rt_con:
-            content += f"\n[转发]\n{post.rt_con}"
-        prompt = self._join_prompt_parts(
-            self.cfg.llm.reply_prompt,
-            "# 输出要求：\n- 只输出最终回复内容，不要解释，不要分点，不要添加额外前缀。",
-            f"\n## 帖子内容\n{content}",
-            f"\n## 要回复的评论\n{comment.nickname}：{comment.content}",
-        )
-        try:
-            raw = await self._chat(prompt, chat_key=chat_key, temperature=0.8)
-            reply = re.sub(r"[\s\u3000]+", "", raw).rstrip("。")
-            logger.info(f"LLM 生成的回复：{reply}")
-            return reply
         except Exception as e:
             raise ValueError(f"LLM 调用失败：{e}") from e

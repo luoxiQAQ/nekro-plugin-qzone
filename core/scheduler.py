@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import random
@@ -101,42 +101,6 @@ class AutoRandomCronTask:
         if self._task:
             self._task.cancel()
         logger.info(f"[{self.job_name}] 已停止")
-
-
-class AutoComment(AutoRandomCronTask):
-    def __init__(
-        self,
-        config: PluginConfig,
-        service: PostService,
-        sender: Sender,
-    ):
-        super().__init__(
-            "AutoComment",
-            config.trigger.comment_cron,
-            config.timezone,
-            config.trigger.comment_offset,
-        )
-        self.cfg = config
-        self.service = service
-        self.sender = sender
-
-    async def do_task(self) -> None:
-        posts = await self.service.query_feeds(
-            pos=0,
-            num=20,
-            no_self=True,
-            no_commented=True,
-        )
-        for post in posts:
-            try:
-                await self.service.comment_posts(post)
-                if self.cfg.trigger.like_when_comment:
-                    await self.service.like_posts(post)
-                await self.sender.send_admin_post(post, message="定时读说说")
-            except Exception as e:
-                logger.exception(
-                    f"[{self.job_name}] 评论失败 tid={post.tid}, uin={post.uin}, name={post.name}: {e}"
-                )
 
 
 class AutoPublish(AutoRandomCronTask):

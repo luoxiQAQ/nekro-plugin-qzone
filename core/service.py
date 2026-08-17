@@ -270,55 +270,6 @@ class PostService:
         await self.db.save(post)
         logger.info(f"评论 → {post.name}")
 
-    async def reply_comment(
-        self,
-        post: Post,
-        index: int,
-        chat_key: str = "",
-    ):
-        """回复评论（自动排除自己的评论）"""
-
-        if not post.tid:
-            raise ValueError("帖子 tid 为空")
-
-        uin = await self.session.get_uin()
-
-        # 排除自己的评论
-        other_comments = [c for c in post.comments if c.uin != uin]
-        n = len(other_comments)
-
-        if n == 0:
-            raise ValueError("没有可回复的评论")
-
-        # 校验索引（基于过滤后的列表）
-        if not (-n <= index < n):
-            raise ValueError(f"索引越界, 当前仅有 {n} 条可回复评论")
-
-        comment = other_comments[index]
-
-        # 生成回复
-        content = await self.llm.generate_reply(post, comment, chat_key=chat_key)
-        if not content:
-            raise ValueError("生成回复内容为空")
-
-        # 发回复
-        resp = await self.qzone.reply(post, comment, content)
-        if not resp.ok:
-            raise RuntimeError(resp.message)
-
-        # 本地回填
-        name = await self.session.get_nickname()
-        post.comments.append(
-            Comment(
-                uin=uin,
-                nickname=name,
-                content=content,
-                create_time=int(time.time()),
-                parent_tid=comment.tid,
-            )
-        )
-        await self.db.save(post)
-
     async def _attach_semantic_sticker(self, post: Post) -> None:
         """Attach one semantically matched sticker to the feed when possible."""
         if not _STICKER_INTEGRATION_AVAILABLE:

@@ -9,7 +9,7 @@ plugin = NekroPlugin(
     module_name="nekro_plugin_qzone",
     description="QQ空间自然语言操作与定时发说说插件",
     version="1.1.2",
-    author="LuoXi",
+    author="luoxiQAQ",
     url="https://github.com/luoxiQAQ/nekro-plugin-qzone",
     allow_sleep=False,
 )

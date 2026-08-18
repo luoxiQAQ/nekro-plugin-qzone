@@ -60,6 +60,12 @@ class Sender:
         for chat_key in self._notification_targets():
             await self.send_post(chat_key, post, message=message)
 
+
+    async def send_admin_msg(self, message: str) -> None:
+        """向管理群/管理员发送纯文本通知"""
+        for chat_key in self._notification_targets():
+            await self.send_msg(chat_key, message)
+
     async def send_user_post(self, post: Post, message: str = "") -> None:
         if post.gin:
             await self.send_post(f"onebot_v11-group_{post.gin}", post, message=message)

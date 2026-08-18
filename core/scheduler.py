@@ -167,6 +167,8 @@ class AutoPublish(AutoRandomCronTask):
             logger.warning(f"获取人设失败（{chat_key}）：{e}")
             return ""
 
+    _RETRY_DELAYS = (10, 30, 60)
+
     async def do_task(self) -> None:
         chat_key = await self._pick_group_chat_key()
         if not chat_key:
@@ -181,14 +183,40 @@ class AutoPublish(AutoRandomCronTask):
             else:
                 logger.info(f"[{self.job_name}] 频道 {chat_key} 无人设，使用默认提示词")
 
-        try:
-            text = await self.service.llm.generate_post(
-                chat_key=chat_key,
-                persona=persona,
+        text: str | None = None
+        last_error: Exception | None = None
+        max_attempts = len(self._RETRY_DELAYS) + 1
+
+        for attempt in range(max_attempts):
+            try:
+                text = await self.service.llm.generate_post(
+                    chat_key=chat_key,
+                    persona=persona,
+                )
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < len(self._RETRY_DELAYS):
+                    delay = self._RETRY_DELAYS[attempt]
+                    logger.warning(
+                        f"[{self.job_name}] LLM 调用失败（第 {attempt + 1} 次），"
+                        f"{delay}秒后重试… 错误：{e}"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        f"[{self.job_name}] LLM 调用连续失败 {max_attempts} 次，放弃。最后错误：{e}"
+                    )
+
+        if text is None:
+            err_msg = (
+                f"⚠️ 定时发说说失败\n"
+                f"LLM 调用连续 {max_attempts} 次均超时/失败\n"
+                f"最后错误：{last_error}"
             )
-        except Exception as e:
-            logger.error(f"自动生成内容失败：{e}")
+            await self.sender.send_admin_msg(err_msg)
             return
+
         post = await self.service.publish_post(text=text)
         await self.sender.send_admin_post(post, message="定时发说说")
 

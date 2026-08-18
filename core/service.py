@@ -330,6 +330,9 @@ class PostService:
                 images=images or [],
             )
 
+        # 尝试附加表情包配图
+        await self._attach_semantic_sticker(post)
+
         # 发布
         resp = await self.qzone.publish(post)
         if not resp.ok:

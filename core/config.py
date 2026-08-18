@@ -27,6 +27,9 @@ class TriggerConfig:
     def __init__(self) -> None:
         self.publish_cron = config.PUBLISH_CRON
         self.publish_offset = config.PUBLISH_OFFSET
+        self.comment_cron = config.COMMENT_CRON
+        self.comment_offset = config.COMMENT_OFFSET
+        self.like_when_comment = config.LIKE_WHEN_COMMENT
 
 
 class PluginConfig:

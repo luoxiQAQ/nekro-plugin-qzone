@@ -9,7 +9,7 @@ from .core.llm_action import LLMAction
 from .core.log import logger
 from .core.model import Post
 from .core.qzone import QzoneAPI, QzoneSession
-from .core.scheduler import AutoPublish
+from .core.scheduler import AutoComment, AutoPublish
 from .core.sender import Sender
 from .core.service import PostService
 from .plugin import plugin
@@ -23,6 +23,7 @@ sender: Sender | None = None
 service: PostService | None = None
 
 auto_publish: AutoPublish | None = None
+auto_comment: AutoComment | None = None
 
 
 async def _get_single_post(
@@ -47,7 +48,7 @@ async def _get_single_post(
 
 @plugin.mount_init_method()
 async def init_plugin() -> None:
-    global session, qzone, db, llm, sender, service, auto_publish
+    global session, qzone, db, llm, sender, service, auto_publish, auto_comment
 
     session = QzoneSession(cfg)
     qzone = QzoneAPI(session, cfg)
@@ -62,6 +63,10 @@ async def init_plugin() -> None:
         auto_publish = AutoPublish(cfg, service, sender)
         auto_publish.start()
 
+    if not auto_comment and cfg.trigger.comment_cron.strip():
+        auto_comment = AutoComment(cfg, service, sender)
+        auto_comment.start()
+
     logger.info("QQ空间插件初始化完成")
 
 
@@ -69,6 +74,8 @@ async def init_plugin() -> None:
 async def cleanup_plugin() -> None:
     if auto_publish:
         await auto_publish.terminate()
+    if auto_comment:
+        await auto_comment.terminate()
     if qzone:
         await qzone.close()
     logger.info("QQ空间插件资源已释放")

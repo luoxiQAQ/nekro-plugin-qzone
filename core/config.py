@@ -62,6 +62,10 @@ class PluginConfig:
         return config.USE_BUILTIN_RENDERER
 
     @property
+    def enable_post_image(self) -> bool:
+        return config.ENABLE_POST_IMAGE
+
+    @property
     def cookie_ttl(self) -> int:
         return config.COOKIE_TTL
 

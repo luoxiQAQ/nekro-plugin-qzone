@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .config import PluginConfig
 from .log import logger
 from .db import PostDB
 from .llm_action import LLMAction
@@ -51,11 +52,13 @@ class PostService:
         session: QzoneSession,
         db: PostDB,
         llm: LLMAction,
+        config: PluginConfig,
     ):
         self.qzone = qzone
         self.session = session
         self.db = db
         self.llm = llm
+        self.cfg = config
 
     # ============================================================
     # 业务接口
@@ -271,8 +274,8 @@ class PostService:
         logger.info(f"评论 → {post.name}")
 
     async def _attach_semantic_sticker(self, post: Post) -> None:
-        """Attach one semantically matched sticker to the feed when possible."""
-        if not _STICKER_INTEGRATION_AVAILABLE:
+        """Attach one semantically matched sticker to the feed when enabled."""
+        if not self.cfg.enable_post_image or not _STICKER_INTEGRATION_AVAILABLE:
             return
         intent = " ".join((post.text or "").split())[:240].strip()
         if not intent:

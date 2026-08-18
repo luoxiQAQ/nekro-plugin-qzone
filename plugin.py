@@ -7,8 +7,8 @@ from nekro_agent.api.plugin import ConfigBase, ExtraField, NekroPlugin
 plugin = NekroPlugin(
     name="QQ空间",
     module_name="nekro_plugin_qzone",
-    description="QQ空间自然语言操作与定时发说说插件",
-    version="1.1.6",
+    description="QQ空间自然语言操作、定时发说说与可选配图插件",
+    version="1.1.7",
     author="luoxiQAQ",
     url="https://github.com/luoxiQAQ/nekro-plugin-qzone",
     allow_sleep=False,
@@ -20,6 +20,11 @@ class QzoneConfig(ConfigBase):
     MANAGE_GROUP: str = Field(default="", title="管理群号", description="定时发说说的通知发送到该群，留空则私聊管理员")
     ADMIN_USERS: list[str] = Field(default=[], title="管理员QQ号", description="用于接收定时发布结果的管理员QQ号列表")
     USE_BUILTIN_RENDERER: bool = Field(default=True, title="启用卡片渲染", description="将说说渲染为卡片图片后发送")
+    ENABLE_POST_IMAGE: bool = Field(
+        default=False,
+        title="说说配图",
+        description="发布说说时自动从语义表情包插件匹配并附加一张图片",
+    )
     MODEL_GROUP: str = Field(
         default="",
         title="LLM模型组",

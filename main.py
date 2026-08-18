@@ -55,7 +55,7 @@ async def init_plugin() -> None:
     db = PostDB(cfg)
     llm = LLMAction(cfg)
     sender = Sender(cfg)
-    service = PostService(qzone, session, db, llm)
+    service = PostService(qzone, session, db, llm, cfg)
 
     await db.initialize()
 

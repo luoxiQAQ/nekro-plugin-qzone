@@ -29,31 +29,44 @@ class AutoRandomCronTask:
     ):
         self.job_name = job_name
         self.cron_expr = cron_expr
-        self._normalized_cron_expr = ""
+        self._normalized_cron_exprs: list[str] = []
         self.timezone = timezone
         self.offset_seconds = offset_seconds
         self._task: asyncio.Task | None = None
         self._terminated = False
 
-    def _normalize_cron_expr(self, raw: str) -> str:
-        raw = raw.strip()
-        match = _TIME_ONLY_RE.match(raw)
-        if not match:
-            return raw
-        hour = int(match.group(1))
-        minute = int(match.group(2))
-        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
-            raise ValueError(f"Invalid time format: {raw}")
-        return f"{minute} {hour} * * *"
+    def _normalize_cron_exprs(self, raw: str) -> list[str]:
+        entries = [part.strip() for part in re.split("[,\uff0c]", raw) if part.strip()]
+        normalized: list[str] = []
+        for entry in entries:
+            match = _TIME_ONLY_RE.match(entry)
+            if match:
+                hour = int(match.group(1))
+                minute = int(match.group(2))
+                if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+                    raise ValueError(f"Invalid time format: {entry}")
+                normalized.append(f"{minute} {hour} * * *")
+            else:
+                normalized.append(entry)
+        seen: set[str] = set()
+        unique: list[str] = []
+        for expr in normalized:
+            if expr not in seen:
+                seen.add(expr)
+                unique.append(expr)
+        return unique
 
     def start(self) -> None:
         if not self.cron_expr or not self.cron_expr.strip():
             logger.info(f"[{self.job_name}] Cron not configured, disabled")
             return
         try:
-            self._normalized_cron_expr = self._normalize_cron_expr(self.cron_expr)
+            self._normalized_cron_exprs = self._normalize_cron_exprs(self.cron_expr)
         except ValueError as e:
             logger.error(f"[{self.job_name}] Invalid time format: {e}")
+            return
+        if not self._normalized_cron_exprs:
+            logger.info(f"[{self.job_name}] Cron not configured, disabled")
             return
         self._task = asyncio.create_task(self._loop())
         logger.info(f"[{self.job_name}] started, schedule: {self.cron_expr}, offset +/-{self.offset_seconds}s")
@@ -61,7 +74,10 @@ class AutoRandomCronTask:
         while not self._terminated:
             now = datetime.now(self.timezone)
             try:
-                base = croniter(self._normalized_cron_expr, now).get_next(datetime)
+                base = min(
+                    croniter(expr, now).get_next(datetime)
+                    for expr in self._normalized_cron_exprs
+                )
             except Exception as e:
                 logger.error(f"[{self.job_name}] Cron 格式错误：{e}")
                 return

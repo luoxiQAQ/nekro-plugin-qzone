@@ -8,7 +8,7 @@ plugin = NekroPlugin(
     name="QQ空间",
     module_name="nekro_plugin_qzone",
     description="QQ空间自然语言操作与定时发说说插件",
-    version="1.1.2",
+    version="1.1.3",
     author="luoxiQAQ",
     url="https://github.com/luoxiQAQ/nekro-plugin-qzone",
     allow_sleep=False,
@@ -38,7 +38,7 @@ class QzoneConfig(ConfigBase):
     )
     IGNORE_GROUPS: list[str] = Field(default=[], title="忽略的群聊", description="不会从这些群抽取聊天记录写说说")
     POST_MAX_MSG: int = Field(default=500, title="写说说参考消息数", description="从群聊抽取用于写说说的最大消息条数", ge=100, le=1000)
-    PUBLISH_CRON: str = Field(default="22:00", title="自动发说说时间", description="格式：HH:MM（例如 22:00）。留空禁用")
+    PUBLISH_CRON: str = Field(default="22:00", title="自动发说说时间", description="格式：HH:MM，支持多个时间用英文或中文逗号隔开（例如 22:00,12:00）。留空禁用")
     PUBLISH_OFFSET: int = Field(default=600, title="自动发说说偏移秒数", description="在Cron基准时间前后随机浮动", ge=0, le=3600)
     COOKIE_TTL: int = Field(default=600, title="Cookie刷新间隔秒数", ge=0, le=86400)
     TIMEOUT: int = Field(default=10, title="请求超时秒数", ge=5, le=60)

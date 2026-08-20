@@ -71,6 +71,7 @@ class AutoRandomCronTask:
         self._task = asyncio.create_task(self._loop())
         logger.info(f"[{self.job_name}] started, schedule: {self.cron_expr}, offset +/-{self.offset_seconds}s")
     async def _loop(self) -> None:
+        last_base: datetime | None = None
         while not self._terminated:
             now = datetime.now(self.timezone)
             try:
@@ -81,6 +82,12 @@ class AutoRandomCronTask:
             except Exception as e:
                 logger.error(f"[{self.job_name}] Cron 格式错误：{e}")
                 return
+
+            if last_base is not None and base <= last_base:
+                base = min(
+                    croniter(expr, last_base + timedelta(seconds=1)).get_next(datetime)
+                    for expr in self._normalized_cron_exprs
+                )
 
             delay = (
                 random.randint(-self.offset_seconds, self.offset_seconds)
@@ -100,6 +107,7 @@ class AutoRandomCronTask:
             if self._terminated:
                 break
 
+            last_base = base
             try:
                 await self.do_task()
             except Exception as e:

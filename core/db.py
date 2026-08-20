@@ -53,8 +53,10 @@ class PostDB:
         )
 
     @staticmethod
-    def _encode_urls(urls: list[str]) -> str:
-        return json.dumps(urls, ensure_ascii=False)
+    def _encode_urls(urls: list) -> str:
+        # post.images 可能混入表情包原始 bytes（仅用于发布上传，不入库），持久化时只保留字符串 URL
+        serializable = [u for u in urls if isinstance(u, str)]
+        return json.dumps(serializable, ensure_ascii=False)
 
     async def initialize(self):
         """初始化数据库"""

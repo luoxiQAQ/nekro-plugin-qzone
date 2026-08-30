@@ -75,14 +75,17 @@ class LLMAction:
         topic: str | None = None,
         persona: str = "",
         use_chat_context: bool = True,
-    ) -> str | None:
-        """生成一条说说
+    ) -> tuple[str, bool]:
+        """生成一条说说，并让 AI 决定是否配表情包。
 
         Args:
             chat_key: 聊天频道标识，用于解析模型组和（可选）参考聊天记录。
             topic: 自然语言写作主题。
             persona: 人设内容，为空则不注入人设。
             use_chat_context: 是否参考聊天记录生成内容。
+
+        Returns:
+            (说说正文, 是否配表情包)
         """
         contexts: list[dict[str, str]] = []
         transcript = ""
@@ -101,7 +104,9 @@ class LLMAction:
                 self.cfg.llm.post_prompt,
                 "# 输出格式要求：\n"
                 '- 使用三对双引号（"""）将正文内容包裹起来。\n'
-                "- 只输出最终可发布的说说正文，不要附带解释、标题或额外说明。",
+                "- 正文结束后，另起一行输出是否配表情包："
+                "适合配一张表情包（幽默、吐槽、情绪化、生活化等内容）就输出 STICKER:YES，否则输出 STICKER:NO。\n"
+                "- 不要附带解释、标题或额外说明。",
             ]
         )
         prompt = self._join_prompt_parts(*parts)
@@ -110,8 +115,9 @@ class LLMAction:
             text = self.extract_content(raw)
             if not text:
                 raise ValueError("LLM 生成的说说为空")
-            logger.info(f"LLM 生成的说说：{text}")
-            return text
+            use_sticker = "STICKER:YES" in raw.upper()
+            logger.info(f"LLM 生成的说说：{text}（配表情包：{use_sticker}）")
+            return text, use_sticker
         except Exception as e:
             raise ValueError(f"LLM 调用失败：{e}") from e
 

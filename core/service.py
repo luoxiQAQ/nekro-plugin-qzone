@@ -315,8 +315,13 @@ class PostService:
         post: Post | None = None,
         text: str | None = None,
         images: list | None = None,
+        with_sticker: bool = False,
     ) -> Post:
-        """发表帖子（支持 Post / text / images，但不能为空）"""
+        """发表帖子（支持 Post / text / images，但不能为空）
+
+        Args:
+            with_sticker: 是否附加语义表情包配图（由 AI 决定）。
+        """
 
         # 参数校验
         if post is None and not text and not images:
@@ -333,8 +338,9 @@ class PostService:
                 images=images or [],
             )
 
-        # 尝试附加表情包配图
-        await self._attach_semantic_sticker(post)
+        # 仅在需要时附加表情包配图
+        if with_sticker:
+            await self._attach_semantic_sticker(post)
 
         # 发布
         resp = await self.qzone.publish(post)

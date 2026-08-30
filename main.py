@@ -146,22 +146,24 @@ async def llm_view_feed(
 async def llm_publish_feed(
     _ctx: AgentCtx,
     text: str = "",
+    with_sticker: bool = False,
 ) -> str:
     """写一篇说说并发布到 QQ 空间。
 
     Args:
         text (str): 要发布的说说内容。
+        with_sticker (bool): 是否配一张表情包图片，由你判断内容是否适合。
 
     Returns:
         str: 发布结果。
 
     Example:
-        llm_publish_feed("今天天气真不错")
+        llm_publish_feed("今天天气真不错", with_sticker=False)
     """
     try:
         if not text.strip():
             return "说说内容不能为空"
-        post = await service.publish_post(text=text)
+        post = await service.publish_post(text=text, with_sticker=with_sticker)
         return "\u5df2\u7ecf\u53d1\u5e03\u8bf4\u8bf4\u5230QQ\u7a7a\u95f4\uff0c\u5185\u5bb9\u662f\uff1a\n" + post.text
     except Exception as exc:
         logger.exception(str(exc))

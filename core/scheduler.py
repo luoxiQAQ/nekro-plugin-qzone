@@ -192,12 +192,13 @@ class AutoPublish(AutoRandomCronTask):
                 logger.info(f"[{self.job_name}] 频道 {chat_key} 无人设，使用默认提示词")
 
         text: str | None = None
+        use_sticker: bool = False
         last_error: Exception | None = None
         max_attempts = len(self._RETRY_DELAYS) + 1
 
         for attempt in range(max_attempts):
             try:
-                text = await self.service.llm.generate_post(
+                text, use_sticker = await self.service.llm.generate_post(
                     chat_key=chat_key,
                     persona=persona,
                 )
@@ -225,7 +226,7 @@ class AutoPublish(AutoRandomCronTask):
             await self.sender.send_admin_msg(err_msg)
             return
 
-        post = await self.service.publish_post(text=text)
+        post = await self.service.publish_post(text=text, with_sticker=use_sticker)
         await self.sender.send_admin_post(post, message="定时发说说")
 
 class AutoComment(AutoRandomCronTask):

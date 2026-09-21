@@ -65,7 +65,9 @@ async def init_plugin() -> None:
         auto_publish = AutoPublish(cfg, service, sender)
         auto_publish.start()
 
-    if not auto_comment and cfg.trigger.comment_cron.strip():
+    if not auto_comment and (
+        cfg.trigger.comment_cron.strip() or cfg.trigger.comment_interval_days > 0
+    ):
         auto_comment = AutoComment(cfg, service, sender)
         auto_comment.start()
 

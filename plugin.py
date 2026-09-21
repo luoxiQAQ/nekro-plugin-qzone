@@ -52,8 +52,15 @@ class QzoneConfig(ConfigBase):
     )
     PUBLISH_CRON: str = Field(default="22:00", title="自动发说说时间（固定模式）", description="仅当间隔天数为 0 时生效。格式：HH:MM，支持多个时间用英文或中文逗号隔开（例如 22:00,12:00）。留空禁用固定模式")
     PUBLISH_OFFSET: int = Field(default=600, title="自动发说说偏移秒数（固定模式）", description="在Cron基准时间前后随机浮动，仅当间隔天数为 0 时生效", ge=0, le=3600)
-    COMMENT_CRON: str = Field(default="08:00", title="自动评论时间", description="格式:HH:MM，支持多个时间用英文或中文逗号隔开 (例如 08:00,20:00)。留空禁用")
-    COMMENT_OFFSET: int = Field(default=600, title="自动评论偏移秒数", description="在Cron基准时间前后随机浮动", ge=0, le=3600)
+    COMMENT_INTERVAL_DAYS: float = Field(
+        default=3,
+        title="自动评论间隔天数",
+        description="每隔多少天评论一次好友动态，执行时刻在该周期内随机（例如 3 = 每 3 天内在随机时刻评论一次）。设为 0 则改用固定时间模式",
+        ge=0,
+        le=30,
+    )
+    COMMENT_CRON: str = Field(default="08:00", title="自动评论时间（固定模式）", description="仅当间隔天数为 0 时生效。格式:HH:MM，支持多个时间用英文或中文逗号隔开 (例如 08:00,20:00)。留空禁用固定模式")
+    COMMENT_OFFSET: int = Field(default=600, title="自动评论偏移秒数（固定模式）", description="在Cron基准时间前后随机浮动，仅当间隔天数为 0 时生效", ge=0, le=3600)
     LIKE_WHEN_COMMENT: bool = Field(default=True, title="评说说时自动点赞", description="定时评论时对评论的说说自动点赞")
     COOKIE_TTL: int = Field(default=600, title="Cookie刷新间隔秒数", ge=0, le=86400)
     TIMEOUT: int = Field(default=10, title="请求超时秒数", ge=5, le=60)

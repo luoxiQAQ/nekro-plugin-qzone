@@ -281,6 +281,7 @@ class AutoComment(AutoRandomScheduleTask):
             config.trigger.comment_cron,
             config.timezone,
             config.trigger.comment_offset,
+            config.trigger.comment_interval_days,
         )
         self.cfg = config
         self.service = service

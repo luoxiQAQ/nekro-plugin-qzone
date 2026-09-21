@@ -28,6 +28,7 @@ class TriggerConfig:
         self.publish_interval_days = config.PUBLISH_INTERVAL_DAYS
         self.publish_cron = config.PUBLISH_CRON
         self.publish_offset = config.PUBLISH_OFFSET
+        self.comment_interval_days = config.COMMENT_INTERVAL_DAYS
         self.comment_cron = config.COMMENT_CRON
         self.comment_offset = config.COMMENT_OFFSET
         self.like_when_comment = config.LIKE_WHEN_COMMENT

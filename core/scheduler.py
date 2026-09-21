@@ -17,8 +17,8 @@ from .sender import Sender
 from .service import PostService
 
 
-class AutoRandomCronTask:
-    """按 Cron 基准时间 + 随机偏移执行任务，基于 croniter + asyncio 实现"""
+class AutoRandomScheduleTask:
+    """定时任务调度：cron 基准时间 + 随机偏移，或每 N 天内随机时刻（由 interval_days 决定）"""
 
     def __init__(
         self,
@@ -26,12 +26,14 @@ class AutoRandomCronTask:
         cron_expr: str,
         timezone: ZoneInfo,
         offset_seconds: int,
+        interval_days: float = 0,
     ):
         self.job_name = job_name
         self.cron_expr = cron_expr
         self._normalized_cron_exprs: list[str] = []
         self.timezone = timezone
         self.offset_seconds = offset_seconds
+        self.interval_days = interval_days
         self._task: asyncio.Task | None = None
         self._terminated = False
 
@@ -57,6 +59,12 @@ class AutoRandomCronTask:
         return unique
 
     def start(self) -> None:
+        if self.interval_days > 0:
+            self._task = asyncio.create_task(self._interval_loop())
+            logger.info(
+                f"[{self.job_name}] started, 每 {self.interval_days:g} 天内随机时刻"
+            )
+            return
         if not self.cron_expr or not self.cron_expr.strip():
             logger.info(f"[{self.job_name}] Cron not configured, disabled")
             return
@@ -70,6 +78,36 @@ class AutoRandomCronTask:
             return
         self._task = asyncio.create_task(self._loop())
         logger.info(f"[{self.job_name}] started, schedule: {self.cron_expr}, offset +/-{self.offset_seconds}s")
+
+    async def _interval_loop(self) -> None:
+        """每 interval_days 天为一个周期，在周期内随机时刻执行一次（长期平均间隔 = interval_days 天）"""
+        interval = timedelta(days=self.interval_days)
+        window_start = datetime.now(self.timezone)
+        while not self._terminated:
+            now = datetime.now(self.timezone)
+            if window_start <= now - interval:
+                window_start = now
+            fire_at = window_start + timedelta(
+                seconds=random.uniform(0, interval.total_seconds())
+            )
+            logger.info(f"[{self.job_name}] 下次执行时间: {fire_at:%Y-%m-%d %H:%M:%S}")
+            wait = max((fire_at - now).total_seconds(), 0)
+            try:
+                await asyncio.sleep(wait)
+            except asyncio.CancelledError:
+                break
+
+            if self._terminated:
+                break
+
+            window_start += interval
+            try:
+                await self.do_task()
+            except Exception as e:
+                logger.exception(f"[{self.job_name}] 任务执行失败: {e}")
+            finally:
+                await asyncio.sleep(1)
+
     async def _loop(self) -> None:
         last_base: datetime | None = None
         while not self._terminated:
@@ -127,7 +165,7 @@ class AutoRandomCronTask:
         logger.info(f"[{self.job_name}] 已停止")
 
 
-class AutoPublish(AutoRandomCronTask):
+class AutoPublish(AutoRandomScheduleTask):
     def __init__(
         self,
         config: PluginConfig,
@@ -139,6 +177,7 @@ class AutoPublish(AutoRandomCronTask):
             config.trigger.publish_cron,
             config.timezone,
             config.trigger.publish_offset,
+            config.trigger.publish_interval_days,
         )
         self.cfg = config
         self.service = service
@@ -229,7 +268,7 @@ class AutoPublish(AutoRandomCronTask):
         post = await self.service.publish_post(text=text, with_sticker=use_sticker)
         await self.sender.send_admin_post(post, message="定时发说说")
 
-class AutoComment(AutoRandomCronTask):
+class AutoComment(AutoRandomScheduleTask):
     """定时评论好友动态"""
     def __init__(
         self,

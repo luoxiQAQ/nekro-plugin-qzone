@@ -59,7 +59,9 @@ async def init_plugin() -> None:
 
     await db.initialize()
 
-    if not auto_publish and cfg.trigger.publish_cron.strip():
+    if not auto_publish and (
+        cfg.trigger.publish_cron.strip() or cfg.trigger.publish_interval_days > 0
+    ):
         auto_publish = AutoPublish(cfg, service, sender)
         auto_publish.start()
 

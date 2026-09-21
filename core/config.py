@@ -25,6 +25,7 @@ class SourceConfig:
 
 class TriggerConfig:
     def __init__(self) -> None:
+        self.publish_interval_days = config.PUBLISH_INTERVAL_DAYS
         self.publish_cron = config.PUBLISH_CRON
         self.publish_offset = config.PUBLISH_OFFSET
         self.comment_cron = config.COMMENT_CRON

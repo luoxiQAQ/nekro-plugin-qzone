@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .accounts import AccountRegistry
 from .config import PluginConfig
 from .log import logger
 from .db import PostDB
@@ -48,14 +49,12 @@ class PostService:
 
     def __init__(
         self,
-        qzone: QzoneAPI,
-        session: QzoneSession,
+        accounts: AccountRegistry,
         db: PostDB,
         llm: LLMAction,
         config: PluginConfig,
     ):
-        self.qzone = qzone
-        self.session = session
+        self.accounts = accounts
         self.db = db
         self.llm = llm
         self.cfg = config
@@ -73,9 +72,11 @@ class PostService:
         with_detail: bool = False,
         no_self: bool = False,
         no_commented: bool = False,
+        account_id: str = "",
     ) -> list[Post]:
+        session, qzone = self.accounts.resolve(account_id)
         if target_id:
-            resp = await self.qzone.get_feeds(target_id, pos=pos, num=num)
+            resp = await qzone.get_feeds(target_id, pos=pos, num=num)
             if not resp.ok:
                 raise RuntimeError(self._map_feed_error(resp, target_id=target_id))
             msglist = resp.data.get("msglist") or []
@@ -85,7 +86,7 @@ class PostService:
             posts: list[Post] = QzoneParser.parse_feeds(msglist)
 
         else:
-            resp = await self.qzone.get_recent_feeds()
+            resp = await qzone.get_recent_feeds()
             if not resp.ok:
                 raise RuntimeError(self._map_feed_error(resp))
             posts: list[Post] = QzoneParser.parse_recent_feeds(resp.data)[
@@ -95,16 +96,16 @@ class PostService:
                 raise RuntimeError("动态流暂无可见说说")
 
         if no_self:
-            uin = await self.session.get_uin()
+            uin = await session.get_uin()
             posts = [p for p in posts if p.uin != uin]
 
         if with_detail:
-            posts = await self._fill_post_detail(posts)
+            posts = await self._fill_post_detail(posts, qzone)
             if not posts:
                 raise RuntimeError("获取详情后无有效说说")
 
         if no_commented:
-            posts = await self._filter_not_commented(posts)
+            posts = await self._filter_not_commented(posts, qzone, session)
 
         for post in posts:
             await self.db.save(post)
@@ -182,11 +183,11 @@ class PostService:
         saved_post = await self.db.get(post.tid, key="tid")
         return bool(saved_post and self._has_comment_from_uin(saved_post, uin))
 
-    async def _fill_post_detail(self, posts: list[Post]) -> list[Post]:
+    async def _fill_post_detail(self, posts: list[Post], qzone: QzoneAPI) -> list[Post]:
         result: list[Post] = []
 
         for post in posts:
-            resp = await self.qzone.get_detail(post)
+            resp = await qzone.get_detail(post)
             if not resp.ok or not resp.data:
                 logger.warning(f"获取详情失败：{resp.data}")
                 continue
@@ -200,9 +201,11 @@ class PostService:
 
         return result
 
-    async def _filter_not_commented(self, posts: list[Post]) -> list[Post]:
+    async def _filter_not_commented(
+        self, posts: list[Post], qzone: QzoneAPI, session: QzoneSession
+    ) -> list[Post]:
         result: list[Post] = []
-        uin = await self.session.get_uin()
+        uin = await session.get_uin()
 
         for post in posts:
             if self._has_comment_from_uin(post, uin):
@@ -212,7 +215,7 @@ class PostService:
 
             # 如果已经有 comments，说明是 detail post
             if not post.comments:
-                resp = await self.qzone.get_detail(post)
+                resp = await qzone.get_detail(post)
                 if not resp.ok or not resp.data:
                     continue
                 parsed = QzoneParser.parse_feeds([resp.data])
@@ -229,37 +232,40 @@ class PostService:
 
     # ==================== 对外接口 ========================
 
-    async def view_visitor(self) -> str:
+    async def view_visitor(self, account_id: str = "") -> str:
         """查看访客"""
-        resp = await self.qzone.get_visitor()
+        _session, qzone = self.accounts.resolve(account_id)
+        resp = await qzone.get_visitor()
         if not resp.ok:
             raise RuntimeError(f"获取访客异常：{resp.data}")
         if not resp.data:
             raise RuntimeError("无访客记录")
         return QzoneParser.parse_visitors(resp.data)
 
-    async def like_posts(self, post: Post):
+    async def like_posts(self, post: Post, account_id: str = ""):
         """点赞帖子"""
         if not post.tid:
             raise ValueError("帖子 tid 为空")
-        await self.qzone.like(post)
+        _session, qzone = self.accounts.resolve(account_id)
+        await qzone.like(post)
         logger.info(f"已点赞 → {post.name}")
 
     async def comment_posts(
-        self, post: Post, chat_key: str = ""
+        self, post: Post, chat_key: str = "", account_id: str = "", persona: str = ""
     ):
         """评论帖子"""
         if not post.tid:
             raise ValueError("帖子 tid 为空")
 
-        content = await self.llm.generate_comment(post, chat_key=chat_key)
+        session, qzone = self.accounts.resolve(account_id)
+        content = await self.llm.generate_comment(post, chat_key=chat_key, persona=persona)
         if not content:
             raise ValueError("生成评论内容为空")
 
-        await self.qzone.comment(post, content)
+        await qzone.comment(post, content)
 
-        uin = await self.session.get_uin()
-        name = await self.session.get_nickname()
+        uin = await session.get_uin()
+        name = await session.get_nickname()
         post.comments.append(
             Comment(
                 uin=uin,
@@ -316,21 +322,25 @@ class PostService:
         text: str | None = None,
         images: list | None = None,
         with_sticker: bool = False,
+        account_id: str = "",
     ) -> Post:
         """发表帖子（支持 Post / text / images，但不能为空）
 
         Args:
             with_sticker: 是否附加语义表情包配图（由 AI 决定）。
+            account_id: 使用哪个 QQ 账号实例（留空为默认实例）。
         """
 
         # 参数校验
         if post is None and not text and not images:
             raise ValueError("post、text、images 不能同时为空")
 
+        session, qzone = self.accounts.resolve(account_id)
+
         # 如果没传 post，就自动构造一个
         if post is None:
-            uin = await self.session.get_uin()
-            name = await self.session.get_nickname()
+            uin = await session.get_uin()
+            name = await session.get_nickname()
             post = Post(
                 uin=uin,
                 name=name,
@@ -343,7 +353,7 @@ class PostService:
             await self._attach_semantic_sticker(post)
 
         # 发布
-        resp = await self.qzone.publish(post)
+        resp = await qzone.publish(post)
         if not resp.ok:
             raise RuntimeError(f"发布说说失败：{resp.data}")
 
@@ -356,10 +366,11 @@ class PostService:
         await self.db.save(post)
         return post
 
-    async def delete_post(self, post: Post):
+    async def delete_post(self, post: Post, account_id: str = ""):
         """删除帖子"""
         if not post.tid:
             raise ValueError("帖子 tid 为空")
-        await self.qzone.delete(post.tid)
+        _session, qzone = self.accounts.resolve(account_id)
+        await qzone.delete(post.tid)
         if post.id:
             await self.db.delete(post.id)

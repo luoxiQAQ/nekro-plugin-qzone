@@ -12,8 +12,9 @@ class QzoneSession:
 
     DOMAIN = "user.qzone.qq.com"
 
-    def __init__(self, config: PluginConfig):
+    def __init__(self, config: PluginConfig, account_id: str = ""):
         self.cfg = config
+        self.account_id = account_id
         self._ctx: QzoneContext | None = None
         self._last_refresh_at: float = 0.0
         self._lock = asyncio.Lock()
@@ -22,9 +23,18 @@ class QzoneSession:
         if self.cfg.client is not None:
             return self.cfg.client
         try:
-            from nekro_agent.adapters.onebot_v11.core.bot import get_bot
-
-            return get_bot()
+            from nekro_agent.adapters.onebot_v11.core import bot as bot_module
+        except Exception:
+            return None
+        if not self.account_id:
+            try:
+                return bot_module.get_bot()
+            except Exception:
+                return None
+        # 多账号下必须精确命中该账号在线的 Bot，禁止回退到其他账号
+        try:
+            qq = bot_module.get_qq_for_instance_id(self.account_id) or self.account_id
+            return bot_module.get_bot_by_self_id(qq)
         except Exception:
             return None
 
@@ -67,6 +77,8 @@ class QzoneSession:
     async def _refresh_ctx_locked(self) -> QzoneContext:
         bot = self._get_bot()
         if not bot:
+            if self.account_id:
+                raise RuntimeError(f"账号 {self.account_id} 的 OneBot 连接不在线")
             raise RuntimeError("OneBot 机器人实例不存在，请确认已连接 NapCat/OneBot")
 
         payload = await bot.call_api("get_cookies", domain=self.DOMAIN)

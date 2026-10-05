@@ -121,16 +121,22 @@ class LLMAction:
         except Exception as e:
             raise ValueError(f"LLM 调用失败：{e}") from e
 
-    async def generate_comment(self, post: Post, chat_key: str = "") -> str | None:
+    async def generate_comment(self, post: Post, chat_key: str = "", persona: str = "") -> str | None:
         """根据帖子内容生成评论"""
         content = post.text
         if post.rt_con:
             content += f"\n[转发]\n{post.rt_con}"
-        prompt = self._join_prompt_parts(
-            self.cfg.llm.comment_prompt,
-            "# 输出要求：\n- 只输出最终评论内容，不要解释，不要分点，不要添加额外前缀。",
-            f"\n[帖子内容]：\n{content}",
+        parts: list[str] = []
+        if persona:
+            parts.append(f"# 你的人设：\n{persona}")
+        parts.extend(
+            [
+                self.cfg.llm.comment_prompt,
+                "# 输出要求：\n- 只输出最终评论内容，不要解释，不要分点，不要添加额外前缀。",
+                f"\n[帖子内容]：\n{content}",
+            ]
         )
+        prompt = self._join_prompt_parts(*parts)
         try:
             raw = await self._chat(prompt, chat_key=chat_key, temperature=0.8)
             comment = re.sub(r"[\s\u3000]+", "", raw).rstrip("。")

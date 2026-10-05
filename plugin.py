@@ -7,8 +7,8 @@ from nekro_agent.api.plugin import ConfigBase, ExtraField, NekroPlugin
 plugin = NekroPlugin(
     name="QQ空间",
     module_name="nekro_plugin_qzone",
-    description="QQ空间自然语言操作、定时发说说与可选配图插件",
-    version="1.2.0",
+    description="QQ空间自然语言操作、定时发说说与可选配图插件（多账号实例各自使用自身人设与登录态）",
+    version="1.3.0",
     author="luoxiQAQ",
     url="https://github.com/luoxiQAQ/nekro-plugin-qzone",
     allow_sleep=False,

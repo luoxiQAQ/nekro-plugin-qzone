@@ -3,20 +3,18 @@ from __future__ import annotations
 from nekro_agent.api.plugin import SandboxMethodType
 from nekro_agent.schemas.agent_ctx import AgentCtx
 
+from .core.accounts import AccountRegistry, get_chat_persona, list_accounts, resolve_account_id
 from .core.config import PluginConfig
 from .core.db import PostDB
 from .core.llm_action import LLMAction
 from .core.log import logger
 from .core.model import Post
-from .core.qzone import QzoneAPI, QzoneSession
 from .core.scheduler import AutoComment, AutoPublish
 from .core.sender import Sender
 from .core.service import PostService
 from .plugin import plugin
 
 cfg = PluginConfig()
-session: QzoneSession | None = None
-qzone: QzoneAPI | None = None
 db: PostDB | None = None
 llm: LLMAction | None = None
 sender: Sender | None = None
@@ -31,6 +29,7 @@ async def _get_single_post(
     target_id: str,
     pos: int,
     with_detail: bool = True,
+    account_id: str = "",
 ) -> Post:
     """按目标 QQ 号和序号取一条说说；目标为空时取好友动态流"""
     if not target_id.strip():
@@ -40,6 +39,7 @@ async def _get_single_post(
         pos=max(pos - 1, 0),
         num=1,
         with_detail=with_detail,
+        account_id=account_id,
     )
     if not posts:
         raise RuntimeError("没有查询到说说")
@@ -48,14 +48,13 @@ async def _get_single_post(
 
 @plugin.mount_init_method()
 async def init_plugin() -> None:
-    global session, qzone, db, llm, sender, service, auto_publish, auto_comment
+    global db, llm, sender, service, auto_publish, auto_comment
 
-    session = QzoneSession(cfg)
-    qzone = QzoneAPI(session, cfg)
+    registry = AccountRegistry(cfg)
     db = PostDB(cfg)
     llm = LLMAction(cfg)
     sender = Sender(cfg)
-    service = PostService(qzone, session, db, llm, cfg)
+    service = PostService(registry, db, llm, cfg)
 
     await db.initialize()
 
@@ -71,7 +70,11 @@ async def init_plugin() -> None:
         auto_comment = AutoComment(cfg, service, sender)
         auto_comment.start()
 
-    logger.info("QQ空间插件初始化完成")
+    accounts = list_accounts()
+    if accounts and (accounts[0].id or accounts[0].qq):
+        logger.info("QQ空间插件初始化完成，账号实例：" + "、".join(a.display for a in accounts))
+    else:
+        logger.info("QQ空间插件初始化完成（未检测到多账号配置，按单账号模式运行）")
 
 
 @plugin.mount_cleanup_method()
@@ -80,8 +83,8 @@ async def cleanup_plugin() -> None:
         await auto_publish.terminate()
     if auto_comment:
         await auto_comment.terminate()
-    if qzone:
-        await qzone.close()
+    if service:
+        await service.accounts.close()
     logger.info("QQ空间插件资源已释放")
 
 
@@ -117,18 +120,25 @@ async def llm_view_feed(
     """
     try:
         target_id = user_id or ""
-        post = await _get_single_post(target_id=target_id, pos=pos + 1)
+        account_id = resolve_account_id(_ctx.chat_key)
+        post = await _get_single_post(target_id=target_id, pos=pos + 1, account_id=account_id)
         message = ""
 
         if like and reply:
-            await service.comment_posts(post, chat_key=_ctx.chat_key)
-            await service.like_posts(post)
+            persona = await get_chat_persona(_ctx.chat_key)
+            await service.comment_posts(
+                post, chat_key=_ctx.chat_key, account_id=account_id, persona=persona
+            )
+            await service.like_posts(post, account_id=account_id)
             message = "已评论并点赞"
         elif reply:
-            await service.comment_posts(post, chat_key=_ctx.chat_key)
+            persona = await get_chat_persona(_ctx.chat_key)
+            await service.comment_posts(
+                post, chat_key=_ctx.chat_key, account_id=account_id, persona=persona
+            )
             message = "已评论"
         elif like:
-            await service.like_posts(post)
+            await service.like_posts(post, account_id=account_id)
             message = "已点赞"
 
         await sender.send_post(_ctx.chat_key, post, message=message)
@@ -167,7 +177,10 @@ async def llm_publish_feed(
     try:
         if not text.strip():
             return "说说内容不能为空"
-        post = await service.publish_post(text=text, with_sticker=with_sticker)
+        account_id = resolve_account_id(_ctx.chat_key)
+        post = await service.publish_post(
+            text=text, with_sticker=with_sticker, account_id=account_id
+        )
         return "\u5df2\u7ecf\u53d1\u5e03\u8bf4\u8bf4\u5230QQ\u7a7a\u95f4\uff0c\u5185\u5bb9\u662f\uff1a\n" + post.text
     except Exception as exc:
         logger.exception(str(exc))

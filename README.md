@@ -74,7 +74,8 @@
    /root/srv/nekro_agent/plugins/workdir/nekro_plugin_qzone
    ```
 
-2. 安装依赖：
+2. 依赖（`beautifulsoup4`、`croniter`）会在插件首次加载时自动安装到 `data/plugins/.dynamic_packages`；
+   如果环境无外网、或想直接装进 NA 主环境，可手动执行：
 
    ```bash
    docker exec nekro_agent /app/.venv/bin/pip install beautifulsoup4 croniter

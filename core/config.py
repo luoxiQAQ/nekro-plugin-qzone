@@ -12,6 +12,7 @@ class LLMConfig:
         self.post_prompt = config.POST_PROMPT
         self.comment_provider_id = ""
         self.comment_prompt = config.COMMENT_PROMPT
+        self.forward_reply_prompt = config.FORWARD_REPLY_PROMPT
 
 
 class SourceConfig:
@@ -32,6 +33,9 @@ class TriggerConfig:
         self.comment_cron = config.COMMENT_CRON
         self.comment_offset = config.COMMENT_OFFSET
         self.like_when_comment = config.LIKE_WHEN_COMMENT
+        self.forward_reply_enabled = config.ENABLE_FORWARD_REPLY
+        self.forward_reply_max = config.FORWARD_REPLY_MAX
+        self.forward_scan_interval_minutes = config.FORWARD_SCAN_INTERVAL_MINUTES
 
 
 class PluginConfig:

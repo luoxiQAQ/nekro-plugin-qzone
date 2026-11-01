@@ -277,6 +277,7 @@ class QzoneParser:
                 text = text_div.get_text(strip=True) if text_div else ""
                 # 提取转发内容
                 rt_con = ""
+                rt_source_uin = 0
                 txt_box = soup.select_one("div.txt-box")
                 if txt_box:
                     # 获取除昵称外的纯文本内容
@@ -284,6 +285,12 @@ class QzoneParser:
                     # 分割掉昵称部分（从第一个冒号开始取内容）
                     if "：" in rt_con:
                         rt_con = rt_con.split("：", 1)[1].strip()
+                    # txt-box 里第一个指向 user.qzone.qq.com/{uin} 的昵称锚点 = 被转发原帖的作者
+                    for anchor in txt_box.find_all("a"):
+                        match = re.search(r"user\.qzone\.qq\.com/(\d+)", anchor.get("href") or "")
+                        if match:
+                            rt_source_uin = int(match.group(1))
+                            break
                 # 提取图片URL
                 image_urls = []
                 # 查找所有图片容器
@@ -369,6 +376,7 @@ class QzoneParser:
                     videos=videos,
                     create_time=create_time,
                     rt_con=rt_con,
+                    rt_source_uin=rt_source_uin,
                     comments=comments,
                 )
                 posts.append(post)

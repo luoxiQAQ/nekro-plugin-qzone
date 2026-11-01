@@ -9,7 +9,7 @@ from .core.db import PostDB
 from .core.llm_action import LLMAction
 from .core.log import logger
 from .core.model import Post
-from .core.scheduler import AutoComment, AutoPublish
+from .core.scheduler import AutoComment, AutoForwardReply, AutoPublish
 from .core.sender import Sender
 from .core.service import PostService
 from .plugin import plugin
@@ -22,6 +22,7 @@ service: PostService | None = None
 
 auto_publish: AutoPublish | None = None
 auto_comment: AutoComment | None = None
+auto_forward_reply: AutoForwardReply | None = None
 
 
 async def _get_single_post(
@@ -48,7 +49,7 @@ async def _get_single_post(
 
 @plugin.mount_init_method()
 async def init_plugin() -> None:
-    global db, llm, sender, service, auto_publish, auto_comment
+    global db, llm, sender, service, auto_publish, auto_comment, auto_forward_reply
 
     registry = AccountRegistry(cfg)
     db = PostDB(cfg)
@@ -70,6 +71,10 @@ async def init_plugin() -> None:
         auto_comment = AutoComment(cfg, service, sender)
         auto_comment.start()
 
+    if not auto_forward_reply and cfg.trigger.forward_reply_enabled:
+        auto_forward_reply = AutoForwardReply(cfg, service, sender)
+        auto_forward_reply.start()
+
     accounts = list_accounts()
     if accounts and (accounts[0].id or accounts[0].qq):
         logger.info("QQ空间插件初始化完成，账号实例：" + "、".join(a.display for a in accounts))
@@ -83,6 +88,8 @@ async def cleanup_plugin() -> None:
         await auto_publish.terminate()
     if auto_comment:
         await auto_comment.terminate()
+    if auto_forward_reply:
+        await auto_forward_reply.terminate()
     if service:
         await service.accounts.close()
     logger.info("QQ空间插件资源已释放")

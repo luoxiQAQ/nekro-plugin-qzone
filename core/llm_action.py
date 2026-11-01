@@ -144,3 +144,30 @@ class LLMAction:
             return comment
         except Exception as e:
             raise ValueError(f"LLM 调用失败：{e}") from e
+
+    async def generate_forward_reply(self, post: Post, chat_key: str = "", persona: str = "") -> str | None:
+        """有人转发了「我」的说说时，按人设生成一句自然的回应评论。
+
+        post 是好友动态流里那条「转发条目」：post.name 是转发者昵称，
+        post.rt_con（回退 post.text）是被转发的我的原文摘要。
+        """
+        original = (post.rt_con or post.text or "").strip()
+        forwarder = post.name or "有人"
+        parts: list[str] = []
+        if persona:
+            parts.append(f"# 你的人设：\n{persona}")
+        parts.extend(
+            [
+                self.cfg.llm.forward_reply_prompt,
+                "# 输出要求：\n- 只输出最终评论内容，不要解释，不要分点，不要添加额外前缀。",
+                f"\n[背景]：{forwarder} 在 TA 的空间转发了你的一条说说。\n[你被转发的原文]：\n{original}",
+            ]
+        )
+        prompt = self._join_prompt_parts(*parts)
+        try:
+            raw = await self._chat(prompt, chat_key=chat_key, temperature=0.8)
+            comment = re.sub(r"[\s\u3000]+", "", raw).rstrip("。")
+            logger.info(f"LLM 生成的转发回应：{comment}")
+            return comment
+        except Exception as e:
+            raise ValueError(f"LLM 调用失败：{e}") from e

@@ -279,6 +279,63 @@ class PostService:
         await self.db.save(post)
         logger.info(f"评论 → {post.name}")
 
+    async def find_my_forwards(
+        self, *, account_id: str = "", limit: int = 3
+    ) -> list[Post]:
+        """扫描好友动态流，返回「别人转发我的说说」且我尚未回应过的条目（最多 limit 条）。
+
+        判定：转发条目解析出的被转发原帖作者 rt_source_uin == 我的 uin，
+        且条目作者 uin != 我的 uin（排除我自己发的）。去重复用 db：
+        回应过的转发会连同我的评论落库，下轮按 tid 命中即跳过。
+        """
+        session, qzone = self.accounts.resolve(account_id)
+        my_uin = await session.get_uin()
+        resp = await qzone.get_recent_feeds()
+        if not resp.ok:
+            raise RuntimeError(self._map_feed_error(resp))
+        posts = QzoneParser.parse_recent_feeds(resp.data)
+        result: list[Post] = []
+        for post in posts:
+            if not post.tid or post.uin == my_uin:
+                continue
+            if post.rt_source_uin != my_uin:
+                continue
+            if await self._has_saved_self_comment(post, my_uin):
+                continue
+            result.append(post)
+            if len(result) >= limit:
+                break
+        return result
+
+    async def reply_to_forward(
+        self, post: Post, chat_key: str = "", account_id: str = "", persona: str = ""
+    ):
+        """回应一条「转发我的说说」：按人设生成一句回应，评论到那条转发下面并落库去重。"""
+        if not post.tid:
+            raise ValueError("帖子 tid 为空")
+
+        session, qzone = self.accounts.resolve(account_id)
+        content = await self.llm.generate_forward_reply(post, chat_key=chat_key, persona=persona)
+        if not content:
+            raise ValueError("生成回应内容为空")
+
+        await qzone.comment(post, content)
+
+        uin = await session.get_uin()
+        name = await session.get_nickname()
+        post.comments.append(
+            Comment(
+                uin=uin,
+                nickname=name,
+                content=content,
+                create_time=int(time.time()),
+                tid=0,
+                parent_tid=None,
+            )
+        )
+        await self.db.save(post)
+        logger.info(f"回应转发 → {post.name}（tid={post.tid}）")
+
     async def _attach_semantic_sticker(self, post: Post) -> None:
         """Attach one semantically matched sticker to the feed when enabled."""
         if not self.cfg.enable_post_image or not _STICKER_INTEGRATION_AVAILABLE:

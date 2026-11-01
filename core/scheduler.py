@@ -366,3 +366,100 @@ class AutoComment(AutoRandomScheduleTask):
                 logger.exception(
                     f"[{self.job_name}] 账号 {spec.display} 评论失败 tid={post.tid}, uin={post.uin}, name={post.name}: {e}"
                 )
+
+
+class AutoForwardReply:
+    """周期扫描好友动态，检测「别人转发我的说说」并按人设回应。
+
+    与 AutoPublish/AutoComment 的随机窗口调度不同，转发要尽量及时，
+    所以用固定间隔（FORWARD_SCAN_INTERVAL_MINUTES）轮询；去重复用 db
+    （回应过的转发连同我的评论落库，下轮按 tid 命中即跳过）。
+    """
+
+    def __init__(
+        self,
+        config: PluginConfig,
+        service: PostService,
+        sender: Sender,
+    ):
+        self.job_name = "AutoForwardReply"
+        self.cfg = config
+        self.service = service
+        self.sender = sender
+        self._task: asyncio.Task | None = None
+        self._terminated = False
+
+    def start(self) -> None:
+        interval = max(int(self.cfg.trigger.forward_scan_interval_minutes), 1)
+        self._task = asyncio.create_task(self._loop())
+        logger.info(f"[{self.job_name}] started, 每 {interval} 分钟扫描一次转发")
+
+    async def _loop(self) -> None:
+        interval = max(int(self.cfg.trigger.forward_scan_interval_minutes), 1) * 60
+        while not self._terminated:
+            # 启动后先等一个周期再首扫，避免刚加载就打接口
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                break
+            if self._terminated:
+                break
+            try:
+                await self.do_task()
+            except Exception as e:
+                logger.exception(f"[{self.job_name}] 任务执行失败: {e}")
+            finally:
+                await asyncio.sleep(1)
+
+    async def do_task(self) -> None:
+        accounts = list_accounts()
+        for index, spec in enumerate(accounts):
+            if index:
+                await asyncio.sleep(random.uniform(3, 10))
+            try:
+                await self._reply_for_account(spec)
+            except Exception as e:
+                logger.exception(f"[{self.job_name}] 账号 {spec.display} 处理转发失败: {e}")
+
+    async def _reply_for_account(self, spec: AccountSpec) -> None:
+        if not await _ensure_account_login(self.service, spec, self.job_name):
+            return
+
+        try:
+            posts = await self.service.find_my_forwards(
+                account_id=spec.id,
+                limit=int(self.cfg.trigger.forward_reply_max),
+            )
+        except Exception as e:
+            logger.warning(f"[{self.job_name}] 账号 {spec.display} 获取动态流失败: {e}")
+            return
+
+        if not posts:
+            return
+
+        persona = await get_account_persona(spec.id)
+        logger.info(
+            f"[{self.job_name}] 账号 {spec.display} 检测到 {len(posts)} 条新转发，开始回应"
+        )
+        for post in posts:
+            try:
+                await self.service.reply_to_forward(
+                    post, account_id=spec.id, persona=persona
+                )
+                if self.cfg.trigger.like_when_comment:
+                    await self.service.like_posts(post, account_id=spec.id)
+                await self.sender.send_admin_post(
+                    post, message=f"回应转发（{spec.display}）", account_id=spec.id
+                )
+            except Exception as e:
+                logger.exception(
+                    f"[{self.job_name}] 账号 {spec.display} 回应转发失败 tid={post.tid}, uin={post.uin}, name={post.name}: {e}"
+                )
+
+    async def terminate(self) -> None:
+        if self._terminated:
+            return
+        self._terminated = True
+        if self._task:
+            self._task.cancel()
+        logger.info(f"[{self.job_name}] 已停止")

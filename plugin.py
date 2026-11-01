@@ -8,7 +8,7 @@ plugin = NekroPlugin(
     name="QQ空间",
     module_name="nekro_plugin_qzone",
     description="QQ空间自然语言操作、定时发说说与可选配图插件（多账号实例各自使用自身人设与登录态）",
-    version="1.3.0",
+    version="1.4.0",
     author="luoxiQAQ",
     url="https://github.com/luoxiQAQ/nekro-plugin-qzone",
     allow_sleep=False,
@@ -62,6 +62,30 @@ class QzoneConfig(ConfigBase):
     COMMENT_CRON: str = Field(default="08:00", title="自动评论时间（固定模式）", description="仅当间隔天数为 0 时生效。格式:HH:MM，支持多个时间用英文或中文逗号隔开 (例如 08:00,20:00)。留空禁用固定模式")
     COMMENT_OFFSET: int = Field(default=600, title="自动评论偏移秒数（固定模式）", description="在Cron基准时间前后随机浮动，仅当间隔天数为 0 时生效", ge=0, le=3600)
     LIKE_WHEN_COMMENT: bool = Field(default=True, title="评说说时自动点赞", description="定时评论时对评论的说说自动点赞")
+    ENABLE_FORWARD_REPLY: bool = Field(
+        default=False,
+        title="被转发时自动回应",
+        description="检测到好友在 TA 的空间转发了我的说说时，自动按人设写一句回应评论到那条转发下面（默认关闭）",
+    )
+    FORWARD_REPLY_MAX: int = Field(
+        default=3,
+        title="单次最多回应转发数",
+        description="每轮扫描最多回应多少条新转发，避免一次性刷太多评论",
+        ge=1,
+        le=10,
+    )
+    FORWARD_SCAN_INTERVAL_MINUTES: int = Field(
+        default=10,
+        title="转发扫描间隔（分钟）",
+        description="每隔多少分钟扫描一次好友动态流里的新转发，仅当「被转发时自动回应」开启时生效",
+        ge=1,
+        le=1440,
+    )
+    FORWARD_REPLY_PROMPT: str = Field(
+        default="有人转发了你的说说，请用你的人设写一句自然、真诚的感谢或回应，不要空泛地夸，不要提及转发机制、定时任务或系统。",
+        title="转发回应提示词",
+        json_schema_extra=ExtraField(is_textarea=True).model_dump(),
+    )
     COOKIE_TTL: int = Field(default=600, title="Cookie刷新间隔秒数", ge=0, le=86400)
     TIMEOUT: int = Field(default=10, title="请求超时秒数", ge=5, le=60)
 

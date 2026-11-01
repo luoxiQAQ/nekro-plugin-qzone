@@ -133,6 +133,8 @@ class Post(pydantic.BaseModel):
     """创建时间"""
     rt_con: str = ""
     """转发内容"""
+    rt_source_uin: int = 0
+    """被转发原帖作者的 QQ 号（仅好友动态流里的转发条目可解析出来，用于判断「有人转发了我的说说」）"""
     comments: list[Comment] = pydantic.Field(default_factory=list)
     """评论列表"""
     extra_text: str | None = None

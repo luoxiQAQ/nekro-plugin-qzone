@@ -198,7 +198,11 @@ class AutoPublish(AutoRandomScheduleTask):
 
     async def _pick_group_chat_key(self, account_id: str) -> str | None:
         """从该账号的活跃群聊频道中随机选一个（排除忽略的群）"""
-        from nekro_agent.adapters.onebot_v11.core.channel_scope import split_scoped_channel_id
+        try:
+            from nekro_agent.adapters.onebot_v11.core.channel_scope import split_scoped_channel_id
+        except ImportError:  # 单实例框架无 channel_scope 模块，退化为「无账号前缀」语义
+            def split_scoped_channel_id(channel_id: str):
+                return None, channel_id
         from nekro_agent.models.db_chat_channel import DBChatChannel
 
         channels = await DBChatChannel.filter(
